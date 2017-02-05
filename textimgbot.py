@@ -142,7 +142,7 @@ def update_templates():
 
 def generate_image(templatefile, output, *args, **kwargs):
     with open(templatefile, 'r', encoding='utf-8') as f:
-        template = f.read().format(*args, **args)
+        template = f.read().format(*args, **kwargs)
     with tempfile.NamedTemporaryFile('w') as f:
         f.write(template)
         proc = subprocess.Popen(
