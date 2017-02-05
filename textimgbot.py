@@ -39,7 +39,7 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
-hashstr = lambda s: base64.urlsafe_b64encode(hashlib.sha256(s).digest())
+hashstr = lambda s: base64.urlsafe_b64encode(hashlib.sha256(s.encode('utf-8')).digest())
 
 def hashfile(filename):
     hash_obj = hashlib.new('sha256')
