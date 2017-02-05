@@ -1,0 +1,6 @@
+{
+ "apitoken": "BOT_API_TOKEN_CHANGE_THIS",
+ "templates": "./templates",
+ "images": "./images",
+ "urlroot": "https://www.example.com/images/"
+}
