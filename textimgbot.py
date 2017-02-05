@@ -143,7 +143,7 @@ def update_templates():
 def generate_image(templatefile, output, *args, **kwargs):
     with open(templatefile, 'r', encoding='utf-8') as f:
         template = f.read().format(*args, **kwargs)
-    with tempfile.NamedTemporaryFile('w') as f:
+    with tempfile.NamedTemporaryFile('w', suffix='.svg') as f:
         f.write(template)
         proc = subprocess.Popen(
             ('inkscape', '-z', '--export-background=white', '-e', output + '.png', f.name),
@@ -182,10 +182,11 @@ def render_images(text):
     ret = []
     for template, templatefile in template_cache.items():
         fileid = hashstr('%s|%s' % (template, text))
-        if os.path.isfile(os.path.join(CFG['images'], fileid + '.jpg')):
+        filepath = os.path.join(CFG['images'], fileid + '.jpg')
+        if os.path.isfile(filepath):
             ret.append(fileid)
         else:
-            success = generate_image(templatefile, fileid + '.jpg', *args)
+            success = generate_image(templatefile, filepath, *args)
             if success:
                 ret.append(fileid)
     return ret
