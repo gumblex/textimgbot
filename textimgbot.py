@@ -39,14 +39,15 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
-hashstr = lambda s: base64.urlsafe_b64encode(hashlib.sha256(s.encode('utf-8')).digest())
+hashstr = lambda s: base64.urlsafe_b64encode(
+    hashlib.sha256(s.encode('utf-8')).digest()).decode('utf-8')
 
 def hashfile(filename):
     hash_obj = hashlib.new('sha256')
     with open(filename, 'rb') as f:
         for chunk in iter(lambda: f.read(4096), b''):
             hash_obj.update(chunk)
-    return base64.urlsafe_b64encode(hash_obj.digest())
+    return base64.urlsafe_b64encode(hash_obj.digest()).decode('utf-8')
 
 # Bot API
 
