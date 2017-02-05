@@ -40,14 +40,14 @@ class AttrDict(dict):
 
 
 hashstr = lambda s: base64.urlsafe_b64encode(
-    hashlib.sha256(s.encode('utf-8')).digest()).decode('utf-8')
+    hashlib.sha256(s.encode('utf-8')).digest()).decode('utf-8').rstrip('=')
 
 def hashfile(filename):
     hash_obj = hashlib.new('sha256')
     with open(filename, 'rb') as f:
         for chunk in iter(lambda: f.read(4096), b''):
             hash_obj.update(chunk)
-    return base64.urlsafe_b64encode(hash_obj.digest()).decode('utf-8')
+    return base64.urlsafe_b64encode(hash_obj.digest()).decode('utf-8').rstrip('=')
 
 # Bot API
 
@@ -154,9 +154,9 @@ def generate_image(templatefile, output, *args, **kwargs):
         except subprocess.TimeoutExpired:
             proc.kill()
             outs, errs = proc.communicate()
-        logger_inkscape.info(outs.decode())
         if proc.returncode != 0:
             logger_inkscape.error('Inkscape returns %s', proc.returncode)
+            logger_inkscape.info(outs.decode())
             return False
         proc = subprocess.Popen(
             ('convert', output + '.png', output),
@@ -172,8 +172,8 @@ def generate_image(templatefile, output, *args, **kwargs):
         except FileNotFoundError:
             pass
         if proc.returncode != 0:
-            logger_inkscape.info(outs.decode())
             logger_inkscape.error('Convert returns %s', proc.returncode)
+            logger_inkscape.info(outs.decode())
             return False
         return True
 
