@@ -295,7 +295,7 @@ def on_document(document, chat, msg):
         sendmsg_sync('Template must be a SVG file.', chat['id'], msg['message_id'])
         return
     cachename = file_id + file_ext
-    url_file = 'https://api.telegram.org/file/bot%s/' % CFG['token']
+    url_file = 'https://api.telegram.org/file/bot%s/' % CFG['apitoken']
     with tempfile.TemporaryDirectory() as tmpdir:
         fpath = os.path.join(tmpdir, cachename)
         retrieve(url_file + file_path, fpath)
