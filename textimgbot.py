@@ -6,6 +6,7 @@ Telegram Text Image Render Bot
 '''
 
 import os
+import re
 import sys
 import time
 import json
@@ -27,8 +28,9 @@ logger_botapi = logging.getLogger('botapi')
 logger_inkscape = logging.getLogger('inkscape')
 
 executor = concurrent.futures.ThreadPoolExecutor(5)
-inkscape_executor = concurrent.futures.ThreadPoolExecutor(4)
 HSession = requests.Session()
+
+re_formatstring = re.compile(r'\{\d*\}')
 
 template_cache = None
 
@@ -84,8 +86,7 @@ def bot_api(method, **params):
         raise BotAPIFailed(repr(ret))
     return ret['result']
 
-@async_func
-def sendmsg(text, chat_id, reply_to_message_id=None, **kwargs):
+def sendmsg_sync(text, chat_id, reply_to_message_id=None, **kwargs):
     text = text.strip()
     if not text:
         logger_botapi.warning('Empty message ignored: %s, %s' % (chat_id, reply_to_message_id))
@@ -98,6 +99,8 @@ def sendmsg(text, chat_id, reply_to_message_id=None, **kwargs):
         reply_id = None
     return bot_api('sendMessage', chat_id=chat_id, text=text,
                    reply_to_message_id=reply_id, **kwargs)
+
+sendmsg = async_func(sendmsg_sync)
 
 @async_func
 def answer(inline_query_id, results, **kwargs):
@@ -117,6 +120,18 @@ def getupdates():
             for upd in updates:
                 MSG_Q.put(upd)
         time.sleep(.2)
+
+def retrieve(url, filename, raisestatus=True):
+    # NOTE the stream=True parameter
+    r = requests.get(url, stream=True)
+    if raisestatus:
+        r.raise_for_status()
+    with open(filename, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=1024):
+            if chunk: # filter out keep-alive new chunks
+                f.write(chunk)
+        f.flush()
+    return r.status_code
 
 def parse_cmd(text: str):
     t = text.strip().replace('\xa0', ' ').split(' ', 1)
@@ -163,7 +178,7 @@ def generate_image(templatefile, output, *args, **kwargs):
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT
         )
         try:
-            outs, errs = proc.communicate(timeout=10)
+            outs, errs = proc.communicate(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
             outs, errs = proc.communicate()
@@ -180,15 +195,18 @@ def generate_image(templatefile, output, *args, **kwargs):
 def render_images(text):
     args = [text] + text.split('/')
     ret = []
+    futures = []
     for template, templatefile in template_cache.items():
         fileid = hashstr('%s|%s' % (template, text))
         filepath = os.path.join(CFG['images'], fileid + '.jpg')
         if os.path.isfile(filepath):
             ret.append(fileid)
         else:
-            success = generate_image(templatefile, filepath, *args)
-            if success:
-                ret.append(fileid)
+            futures.append(
+                (fileid, executor.submit(generate_image, templatefile, filepath, *args)))
+    for fileid, future in futures:
+        if future.result():
+            ret.append(fileid)
     return ret
 
 # Query handling
@@ -246,12 +264,55 @@ def inline_result(images):
     return ret
 
 def cmd_delsvg(expr, chat, replyid, msg):
-    if chat['type'] == 'private':
-        return "Not Implemented."
+    if chat['type'] != 'private':
+        return
+    # the length of hashstr/hashfile.
+    if len(expr) == 43 and expr in template_cache:
+        try:
+            os.unlink(os.path.join(CFG['templates'], expr + '.svg'))
+        except FileNotFoundError:
+            pass
+        del template_cache[expr]
+        return "Template deleted."
+    else:
+        return "Invalid template id."
 
+@async_func
 def on_document(document, chat, msg):
-    if chat['type'] == 'private':
-        return "Not Implemented."
+    if chat['type'] != 'private':
+        return
+    file_id = document['file_id']
+    fp = bot_api('getFile', file_id=file_id)
+    file_size = fp.get('file_size') or document.get('file_size')
+    if file_size and file_size > 300*1024:
+        sendmsg_sync('File too big. Must be <300 KiB.', chat['id'], msg['message_id'])
+        return
+    file_path = fp.get('file_path')
+    if not file_path:
+        raise BotAPIFailed("can't get file_path for " + file_id)
+    file_ext = os.path.splitext(file_path)[1]
+    if file_ext != '.svg':
+        sendmsg_sync('Template must be a SVG file.', chat['id'], msg['message_id'])
+        return
+    cachename = file_id + file_ext
+    url_file = 'https://api.telegram.org/file/bot%s/' % CFG['token']
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fpath = os.path.join(tmpdir, cachename)
+        retrieve(url_file + file_path, fpath)
+        try:
+            with open(fpath, 'r', encoding='utf-8') as f:
+                template = f.read()
+                template.index('<?xml')
+                template.index('<svg')
+                assert re_formatstring.search(template)
+            assert generate_image(fpath, os.path.join(tmpdir, file_id + '.jpg'), "test")
+        except Exception:
+            sendmsg_sync('Invaild SVG file.', chat['id'], msg['message_id'])
+            return
+        filehash = hashfile(fpath)
+        os.rename(fpath, os.path.join(CFG['templates'], filehash + '.svg'))
+    sendmsg_sync('Template uploaded.', chat['id'], msg['message_id'])
+    update_templates()
 
 def load_config():
     return AttrDict(json.load(open('config.json', encoding='utf-8')))
