@@ -311,7 +311,7 @@ def on_document(document, chat, msg):
             return
         filehash = hashfile(fpath)
         os.rename(fpath, os.path.join(CFG['templates'], filehash + '.svg'))
-    sendmsg_sync('Template uploaded.', chat['id'], msg['message_id'])
+    sendmsg_sync('Template uploaded. ID: ' + filehash, chat['id'], msg['message_id'])
     update_templates()
 
 def load_config():
