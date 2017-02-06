@@ -244,7 +244,7 @@ def handle_api_update(d: dict):
                     if cmd == 'start':
                         ret = START
                     elif cmd == 'delsvg':
-                        ret = cmd_delsvg(text, msg['chat'], msg['message_id'], msg)
+                        ret = cmd_delsvg(expr, msg['chat'], msg['message_id'], msg)
                     else:
                         ret = HELP
             if ret:
